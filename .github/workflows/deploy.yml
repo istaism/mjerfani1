@@ -1,0 +1,54 @@
+name: Publish website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout website
+        uses: actions/checkout@v4
+      - name: Extract complete website
+        run: |
+          unzip -q MJErfani_GitHub_Website.zip -d extracted
+          test -f extracted/mjerfani-site/index.html
+      - name: Build and validate
+        working-directory: extracted/mjerfani-site
+        run: |
+          python3 tools/build.py
+          python3 tools/check.py
+          node --check assets/js/main.js
+      - name: Prepare public files
+        run: |
+          mkdir -p _site
+          cp extracted/mjerfani-site/{index.html,404.html,robots.txt,sitemap.xml,CNAME} _site/
+          cp -R extracted/mjerfani-site/{assets,about,music,education,contact} _site/
+          touch _site/.nojekyll
+          for file in google*.html; do
+            [ ! -f "$file" ] || cp "$file" _site/
+          done
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
